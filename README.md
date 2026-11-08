@@ -21,3 +21,12 @@ The HTML app is bundled locally in `app/src/main/assets/index.html`.
 
 ## Important
 This workflow creates a debug-signed APK for testing and direct installation. A Play Store production release requires a private release keystore stored securely in GitHub Secrets.
+
+## Gradle build
+This project includes `gradlew` and `gradlew.bat` bootstrap launchers configured for Gradle 8.9. On first use, they download the official Gradle 8.9 binary distribution. Internet access is required for this first download and for Android/Gradle dependencies.
+
+On Linux/macOS:
+```sh
+chmod +x ./gradlew
+./gradlew assembleDebug
+```
