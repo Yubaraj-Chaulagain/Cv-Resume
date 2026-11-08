@@ -1,8 +1,7 @@
-name: Build APK and Publish Release
+name: Build and Release APK
 
 on:
   workflow_dispatch:
-
   push:
     tags:
       - 'v*'
@@ -16,53 +15,69 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # 1. Download Source Code
+      # 1. Checkout Source
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # 2. Setup Java
+      # 2. Setup Java 17
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       # 3. Setup Android SDK
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
+        uses: android-actions/setup-android@v3
 
-      # 4. Accept Android Licenses
-      - name: Accept Android Licenses
-        run: yes | sdkmanager --licenses
+      # 4. Install Android SDK Packages
+      - name: Install Android SDK Packages
+        run: |
+          set -e
 
-      # 5. Setup Gradle
+          yes | sdkmanager --licenses || true
+
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+          sdkmanager --list_installed
+
+      # 5. Setup Gradle 8.9
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
-      # 6. Build APK
+      # 6. Build Debug APK
       - name: Build Debug APK
         run: |
-          chmod +x ./gradlew
-          ./gradlew --no-daemon assembleDebug
+          set -e
+
+          gradle --version
+
+          gradle --no-daemon clean assembleDebug
 
       # 7. Check APK
       - name: Check APK
         run: |
+          set -e
+
           APK="app/build/outputs/apk/debug/app-debug.apk"
 
           if [ ! -f "$APK" ]; then
-            echo "ERROR: APK file not found!"
+            echo "APK file not found!"
             find . -name "*.apk"
             exit 1
           fi
 
-          cp "$APK" Pro-CV-Builder.apk
+          mkdir -p release
+
+          cp "$APK" release/Pro-CV-Builder.apk
+
+          ls -lh release/Pro-CV-Builder.apk
 
       # 8. Generate Release Tag
       - name: Generate Release Tag
@@ -77,7 +92,7 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      # 9. Publish APK Directly to GitHub Release
+      # 9. Publish GitHub Release
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -85,15 +100,17 @@ jobs:
           target_commitish: ${{ github.sha }}
           name: Pro CV Builder ${{ steps.release_tag.outputs.tag }}
           body: |
-            ## Pro CV Builder Android App
+            # Pro CV Builder
 
-            - Android APK
+            Android Application Release
+
+            Features:
             - Offline CV Builder
             - Professional Resume Maker
+            - PDF CV Export
+            - Mobile Support
 
-            Download Pro-CV-Builder.apk below.
-          files: |
-            Pro-CV-Builder.apk
+          files: release/Pro-CV-Builder.apk
           draft: false
           prerelease: false
           make_latest: true
