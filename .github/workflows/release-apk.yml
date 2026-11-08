@@ -10,107 +10,82 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build:
     name: Build and Release APK
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout Source
+      # Checkout
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      # 2. Setup Java 17
-      - name: Setup Java 17
+      # Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
 
-      # 3. Setup Android SDK
+      # Android SDK FIX
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
-      # 4. Install Android SDK Packages
-      - name: Install Android SDK Packages
+      # Install SDK Packages
+      - name: Install SDK Packages
         run: |
-          set -e
-
-          yes | sdkmanager --licenses || true
-
           sdkmanager --install \
-            "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "build-tools;35.0.0" \
+            "platform-tools"
 
-          sdkmanager --list_installed
-
-      # 5. Setup Gradle 8.9
+      # Gradle 8.9
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      # 6. Build Debug APK
+      # Build APK
       - name: Build Debug APK
         run: |
-          set -e
-
-          gradle --version
-
           gradle --no-daemon clean assembleDebug
 
-      # 7. Check APK
+      # Find APK
       - name: Check APK
         run: |
-          set -e
+          mkdir -p release
 
-          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APK=$(find . -path "*/build/outputs/apk/*/*.apk" \
+            -type f | head -n 1)
 
-          if [ ! -f "$APK" ]; then
-            echo "APK file not found!"
-            find . -name "*.apk"
+          if [ -z "$APK" ]; then
+            echo "APK NOT FOUND!"
             exit 1
           fi
 
-          mkdir -p release
-
           cp "$APK" release/Pro-CV-Builder.apk
 
-          ls -lh release/Pro-CV-Builder.apk
+          ls -lh release/
 
-      # 8. Generate Release Tag
+      # Generate Release Tag
       - name: Generate Release Tag
-        id: release_tag
-        shell: bash
+        id: tag
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            TAG="$GITHUB_REF_NAME"
-          else
-            TAG="v1.0.${GITHUB_RUN_NUMBER}"
-          fi
+          echo "tag=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
 
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      # 9. Publish GitHub Release
+      # Publish Release
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: Pro CV Builder ${{ steps.release_tag.outputs.tag }}
+          name: Pro CV Builder ${{ steps.tag.outputs.tag }}
           body: |
-            # Pro CV Builder
+            Pro CV Builder Android App
 
-            Android Application Release
-
-            Features:
-            - Offline CV Builder
-            - Professional Resume Maker
-            - PDF CV Export
-            - Mobile Support
-
+            Release APK
           files: release/Pro-CV-Builder.apk
+          make_latest: true
           draft: false
           prerelease: false
-          make_latest: true
