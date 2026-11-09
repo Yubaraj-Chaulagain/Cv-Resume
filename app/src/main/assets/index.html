@@ -1711,21 +1711,26 @@ function deleteOfflineData(id){
 
 async function syncToSheet(){
 
+    // Offline CVs are stored in IndexedDB (cvData), not localStorage.
+    // Read the same database used by saveOffline() so saved CVs can sync.
     let all = [];
 
     try{
-
-        all =
-            JSON.parse(
-                localStorage.getItem(
-                    "offlineCVs"
-                ) || "[]"
-            );
-
+        if(!db){
+            await new Promise((resolve) => {
+                const started = Date.now();
+                const timer = setInterval(() => {
+                    if(db || Date.now() - started > 10000){
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+        all = await getAllFromIndexedDB();
     }catch(error){
-
+        console.error("Could not read offline CV database:", error);
         all = [];
-
     }
 
 
@@ -1796,9 +1801,11 @@ async function syncToSheet(){
                     {
                         method: "POST",
 
+                        // text/plain avoids a cross-origin OPTIONS preflight
+                        // when calling a Google Apps Script Web App from WebView.
                         headers: {
                             "Content-Type":
-                                "application/json"
+                                "text/plain;charset=utf-8"
                         },
 
                         body:
