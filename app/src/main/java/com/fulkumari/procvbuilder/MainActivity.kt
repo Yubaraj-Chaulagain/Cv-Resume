@@ -10,12 +10,38 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
+import android.webkit.JavascriptInterface
+import android.print.PrintAttributes
+import android.print.PrintManager
 import android.widget.Toast
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserRequest = 1001
+    private var printRequested = false
+
+    inner class AndroidBridge {
+        @JavascriptInterface
+        fun printPdf(fileName: String) {
+            runOnUiThread {
+                try {
+                    val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "CV.pdf" }
+                    val printManager = getSystemService(PRINT_SERVICE) as PrintManager
+                    val adapter = webView.createPrintDocumentAdapter(safeName.removeSuffix(".pdf"))
+                    val attributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setResolution(PrintAttributes.Resolution("cv_pdf", "CV PDF", 300, 300))
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
+                    printRequested = true
+                    printManager.print(safeName.removeSuffix(".pdf"), adapter, attributes)
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "PDF बनाउन सकिएन: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +59,8 @@ class MainActivity : Activity() {
             cacheMode = WebSettings.LOAD_DEFAULT
             mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         }
+
+        webView.addJavascriptInterface(AndroidBridge(), "AndroidBridge")
 
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -71,6 +99,16 @@ class MainActivity : Activity() {
             webView.loadUrl("file:///android_asset/index.html")
         } else {
             webView.restoreState(savedInstanceState)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::webView.isInitialized && printRequested) {
+            printRequested = false
+            webView.postDelayed({
+                webView.evaluateJavascript("if (typeof restoreAfterPrint === 'function') restoreAfterPrint();", null)
+            }, 300)
         }
     }
 
