@@ -251,6 +251,15 @@ h1{
 
 }
 
+
+@media print {
+ @page { size:A4; margin:0; }
+ html,body { margin:0!important; padding:0!important; background:#fff!important; }
+ body.print-cv .form, body.print-resume .form, body.print-resume .cv, body.print-resume #previewModal { display:none!important; }
+ body.print-cv .cv { display:flex!important; width:210mm!important; height:297mm!important; min-height:297mm!important; margin:0!important; box-shadow:none!important; border-radius:0!important; }
+ body.print-resume #resumePDF { display:block!important; width:210mm!important; min-height:297mm!important; padding:12mm!important; margin:0!important; box-sizing:border-box!important; }
+ body.print-resume #resumePDF * { -webkit-print-color-adjust:exact!important; print-color-adjust:exact!important; }
+}
 </style>
 </head>
 
@@ -2631,7 +2640,17 @@ function downloadTXT(){
 async function downloadPDF(){
 
     gen();
-
+    if (window.AndroidBridge && typeof window.AndroidBridge.printPdf === "function") {
+        document.body.classList.remove("print-resume");
+        document.body.classList.add("print-cv");
+        const n = (document.getElementById("name").value.trim() || "CV").replace(/[\\/:*?"<>|]/g, "_");
+        window.AndroidBridge.printPdf(n + ".pdf");
+        return;
+    }
+    if (!window.jspdf || !window.jspdf.jsPDF || typeof html2canvas !== "function") {
+        alert("PDF library load bhayena. Internet connection check garnuhos, ani feri try garnuhos.");
+        return;
+    }
 
     const {
         jsPDF
@@ -2913,7 +2932,34 @@ function generateResume(){
 async function downloadResumePDF(){
 
     generateResume();
-
+    if (window.AndroidBridge && typeof window.AndroidBridge.printPdf === "function") {
+        const old = document.getElementById("resumePDF");
+        if (old) old.remove();
+        const node = document.createElement("div");
+        node.id = "resumePDF";
+        node.innerHTML = `
+          <div style="text-align:center">
+            <img src="${document.getElementById("cvPhoto").src}" style="width:34mm;height:34mm;border-radius:50%;object-fit:cover;border:1mm solid #0f766e">
+            <h1>${escapeHTML(document.getElementById("name").value)}</h1>
+            <p>${escapeHTML(document.getElementById("phone").value)} | ${escapeHTML(document.getElementById("email").value)}</p>
+            <p>${escapeHTML(document.getElementById("location").value)}</p>
+          </div><hr>
+          <h2 style="color:#0f766e">Professional Summary</h2><p>${escapeHTML(document.getElementById("cvSummary").innerText)}</p>
+          <h2 style="color:#0f766e">Skills</h2><p>${escapeHTML(document.getElementById("skills").value).replace(/\n/g,"<br>")}</p>
+          <h2 style="color:#0f766e">Work Experience</h2>${document.getElementById("cvWork").innerHTML}
+          <h2 style="color:#0f766e">Education</h2><p>${escapeHTML(document.getElementById("education").value).replace(/\n/g,"<br>")}</p>
+          <h2 style="color:#0f766e">Responsibilities</h2><p>${escapeHTML(document.getElementById("Responsbiliti").value).replace(/\n/g,"<br>")}</p>`;
+        document.body.appendChild(node);
+        document.body.classList.remove("print-cv");
+        document.body.classList.add("print-resume");
+        const n = (document.getElementById("name").value.trim() || "Resume").replace(/[\\/:*?"<>|]/g, "_");
+        window.AndroidBridge.printPdf(n + "_Resume.pdf");
+        return;
+    }
+    if (!window.jspdf || !window.jspdf.jsPDF || typeof html2canvas !== "function") {
+        alert("PDF library load bhayena. Internet connection check garnuhos, ani feri try garnuhos.");
+        return;
+    }
 
     const {
         jsPDF
@@ -3383,78 +3429,42 @@ img.addEventListener(
 );
 
 
-/* DRAG */
-
+/* DRAG: finger, mouse and stylus support */
 let isDragging = false;
-
 let startX = 0;
-
 let startY = 0;
-
-
-img.addEventListener(
-    "mousedown",
-    startDrag
-);
-
-
-function startDrag(e){
-
-    isDragging =
-        true;
-
-
-    startX =
-        e.clientX -
-        posX;
-
-
-    startY =
-        e.clientY -
-        posY;
-
+let activePointerId = null;
+img.style.touchAction = "none";
+img.addEventListener("pointerdown", function(e){
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+    isDragging = true;
+    activePointerId = e.pointerId;
+    startX = e.clientX - posX;
+    startY = e.clientY - posY;
+    try { img.setPointerCapture(e.pointerId); } catch (_) {}
+});
+img.addEventListener("pointermove", function(e){
+    if (!isDragging || e.pointerId !== activePointerId) return;
+    e.preventDefault();
+    posX = e.clientX - startX;
+    posY = e.clientY - startY;
+    updateTransform();
+});
+function stopPhotoDrag(e){
+    if (activePointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
+    isDragging = false;
+    activePointerId = null;
 }
+img.addEventListener("pointerup", stopPhotoDrag);
+img.addEventListener("pointercancel", stopPhotoDrag);
+img.addEventListener("lostpointercapture", stopPhotoDrag);
 
-
-document.addEventListener(
-    "mousemove",
-    function(e){
-
-        if(
-            !isDragging
-        ){
-
-            return;
-
-        }
-
-
-        posX =
-            e.clientX -
-            startX;
-
-
-        posY =
-            e.clientY -
-            startY;
-
-
-        updateTransform();
-
-    }
-);
-
-
-document.addEventListener(
-    "mouseup",
-    function(){
-
-        isDragging =
-            false;
-
-    }
-);
-
+function restoreAfterPrint(){
+    document.body.classList.remove("print-cv", "print-resume");
+    const node = document.getElementById("resumePDF");
+    if (node) node.remove();
+}
 
 /* =====================================================
    PHOTO INPUT
