@@ -42,5 +42,5 @@ android {
 }
 
 dependencies {
-    // No additional dependencies required
+    implementation 'androidx.core:core:1.13.1'
 }
