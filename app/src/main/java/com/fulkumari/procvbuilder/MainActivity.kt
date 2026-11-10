@@ -14,6 +14,9 @@ import android.webkit.JavascriptInterface
 import android.print.PrintAttributes
 import android.print.PrintManager
 import android.widget.Toast
+import androidx.core.content.FileProvider
+import android.util.Base64
+import java.io.File
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -22,6 +25,31 @@ class MainActivity : Activity() {
     private var printRequested = false
 
     inner class AndroidBridge {
+        @JavascriptInterface
+        fun sharePdf(base64Pdf: String, fileName: String, recipient: String, subject: String, body: String) {
+            runOnUiThread {
+                try {
+                    val bytes = Base64.decode(base64Pdf, Base64.DEFAULT)
+                    val safeName = fileName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "CV.pdf" }
+                    val folder = File(cacheDir, "shared_pdfs").apply { mkdirs() }
+                    val file = File(folder, safeName)
+                    file.writeBytes(bytes)
+                    val uri = FileProvider.getUriForFile(this@MainActivity, "$packageName.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_EMAIL, arrayOf(recipient))
+                        putExtra(Intent.EXTRA_SUBJECT, subject)
+                        putExtra(Intent.EXTRA_TEXT, body)
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    startActivity(Intent.createChooser(intent, "Send PDF using Gmail or Email"))
+                } catch (e: Exception) {
+                    Toast.makeText(this@MainActivity, "PDF share गर्न सकिएन: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
         @JavascriptInterface
         fun printPdf(fileName: String) {
             runOnUiThread {
