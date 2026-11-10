@@ -363,6 +363,10 @@ placeholder="Responsibilities"></textarea>
     Download Professional Resume PDF
 </button>
 
+<button type="button" onclick="emailPdfToCustomer()">
+    ✉️ Email PDF to Customer (Gmail)
+</button>
+
 <button type="button" onclick="copyAllData()">
     Copy All Entry Data
 </button>
@@ -2632,6 +2636,46 @@ function downloadTXT(){
 
 }
 
+
+/* =====================================================
+   EMAIL PDF TO CUSTOMER - uses Android share chooser, no Apps Script
+===================================================== */
+async function emailPdfToCustomer(){
+    const email = (document.getElementById("email")?.value || "").trim();
+    const name = (document.getElementById("name")?.value || "Customer").trim();
+    if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        alert("कृपया ग्राहकको सही Email Address राख्नुहोस्।"); return;
+    }
+    if(!window.jspdf?.jsPDF || typeof html2canvas !== "function"){
+        alert("PDF library load भएन। Internet जाँच गरेर फेरि प्रयास गर्नुहोस्।"); return;
+    }
+    try{
+        gen();
+        const target = document.querySelector(".cv");
+        if(!target){ alert("CV तयार छैन। पहिले Generate CV गर्नुहोस्।"); return; }
+        const canvas = await html2canvas(target,{scale:2,useCORS:true,backgroundColor:"#ffffff"});
+        const {jsPDF} = window.jspdf;
+        const pdf = new jsPDF("p","mm","a4");
+        const width=210, pageHeight=297;
+        const height=canvas.height*width/canvas.width;
+        const image=canvas.toDataURL("image/jpeg",0.95);
+        let y=0, remaining=height;
+        pdf.addImage(image,"JPEG",0,y,width,height);
+        while(remaining>pageHeight){ y-=pageHeight; pdf.addPage(); pdf.addImage(image,"JPEG",0,y,width,height); remaining-=pageHeight; }
+        const fileName=(name||"CV").replace(/[\\/:*?"<>|]/g,"_")+".pdf";
+        if(window.AndroidBridge && typeof window.AndroidBridge.sharePdf === "function"){
+            const data=pdf.output("datauristring").split(",")[1];
+            window.AndroidBridge.sharePdf(data,fileName,email,"Your CV is ready - "+name,
+                "Dear "+name+",\n\nPlease find your CV PDF attached. Thank you for using our service.\n\nBest regards");
+        }else{
+            pdf.save(fileName);
+            const subject=encodeURIComponent("Your CV is ready - "+name);
+            const body=encodeURIComponent("Dear "+name+",\n\nYour CV PDF has been prepared. Please attach the downloaded PDF before sending.");
+            window.location.href="mailto:"+encodeURIComponent(email)+"?subject="+subject+"&body="+body;
+            alert("PDF डाउनलोड भयो। Gmail मा खोलिएपछि PDF attach गरेर Send गर्नुहोस्।");
+        }
+    }catch(err){ console.error(err); alert("Email PDF तयार गर्न सकिएन: "+err.message); }
+}
 
 /* =====================================================
    DOWNLOAD PDF
